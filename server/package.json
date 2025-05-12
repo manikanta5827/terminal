@@ -1,0 +1,22 @@
+{
+  "name": "terminal-server",
+  "version": "1.0.0",
+  "description": "Terminal server with WebSocket support",
+  "main": "con.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node con.js",
+    "dev": "nodemon con.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-pty": "^0.10.1",
+    "socket.io": "^4.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}
