@@ -9,27 +9,8 @@ function App() {
   const socketRef = useRef(null)
   const termRef = useRef(null)
   const [isConnected, setIsConnected] = useState(false)
-  const [serverStatus, setServerStatus] = useState({ status: 'unknown', uptime: 0 })
-
-  // Health check function
-  const checkServerHealth = async () => {
-    try {
-      const response = await fetch('http://localhost:4000/health')
-      const data = await response.json()
-      setServerStatus(data)
-    } catch (error) {
-      console.error('Health check failed:', error)
-      setServerStatus({ status: 'error', uptime: 0 })
-    }
-  }
 
   useEffect(() => {
-    // Initial health check
-    checkServerHealth()
-
-    // Set up periodic health checks
-    const healthCheckInterval = setInterval(checkServerHealth, 30000) // Check every 30 seconds
-
     let term = null
     let fitAddon = null
 
@@ -79,11 +60,88 @@ function App() {
     }
 
     const initializeSocket = () => {
-      socketRef.current = io('http://localhost:4000', {
-        transports: ['websocket'],
+      socketRef.current = io('/', {
+        transports: ['polling', 'websocket'],
         reconnection: true,
-        reconnectionAttempts: 5,
-        timeout: 10000
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        autoConnect: true,
+        forceNew: true,
+        path: '/socket.io/',
+        upgrade: true,
+        rememberUpgrade: true,
+        rejectUnauthorized: false
+      })
+
+      socketRef.current.on('connect_error', (error) => {
+        console.error('Connection error:', error)
+        setIsConnected(false)
+        if (term) {
+          term.write('\r\n\x1b[31mConnection error. Attempting to reconnect...\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('connect', () => {
+        console.log('Connected to server')
+        setIsConnected(true)
+        if (term) {
+          term.write('\r\n\x1b[32mConnected to server.\x1b[0m\r\n')
+          fitAddon.fit()
+          const { rows, cols } = term
+          socketRef.current.emit('resize', { rows, cols })
+        }
+      })
+
+      socketRef.current.on('disconnect', (reason) => {
+        console.log('Disconnected from server:', reason)
+        setIsConnected(false)
+        if (term) {
+          term.write('\r\n\x1b[33mDisconnected from server. Reason: ' + reason + '\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('reconnect_attempt', (attemptNumber) => {
+        console.log('Reconnection attempt:', attemptNumber)
+        if (term) {
+          term.write('\r\n\x1b[33mAttempting to reconnect... (Attempt ' + attemptNumber + ')\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected after', attemptNumber, 'attempts')
+        if (term) {
+          term.write('\r\n\x1b[32mReconnected to server.\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('reconnect_error', (error) => {
+        console.error('Reconnection error:', error)
+        if (term) {
+          term.write('\r\n\x1b[31mReconnection error: ' + error.message + '\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('reconnect_failed', () => {
+        console.error('Failed to reconnect')
+        if (term) {
+          term.write('\r\n\x1b[31mFailed to reconnect to server.\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('upgrade', (transport) => {
+        console.log('Transport upgraded to:', transport.name)
+        if (term) {
+          term.write('\r\n\x1b[36mTransport upgraded to: ' + transport.name + '\x1b[0m\r\n')
+        }
+      })
+
+      socketRef.current.on('upgradeError', (error) => {
+        console.error('Transport upgrade error:', error)
+        if (term) {
+          term.write('\r\n\x1b[31mTransport upgrade failed: ' + error.message + '\x1b[0m\r\n')
+        }
       })
 
       socketRef.current.on('output', (data) => {
@@ -99,21 +157,6 @@ function App() {
           }
         })
       }
-
-      socketRef.current.on('connect', () => {
-        console.log('Connected to server')
-        setIsConnected(true)
-        if (fitAddon) {
-          fitAddon.fit()
-          const { rows, cols } = term
-          socketRef.current.emit('resize', { rows, cols })
-        }
-      })
-
-      socketRef.current.on('disconnect', () => {
-        console.log('Disconnected from server')
-        setIsConnected(false)
-      })
     }
 
     initializeTerminal()
@@ -133,7 +176,6 @@ function App() {
     handleResize()
 
     return () => {
-      clearInterval(healthCheckInterval)
       if (term) {
         term.dispose()
       }
@@ -144,14 +186,6 @@ function App() {
     }
   }, [])
 
-  // Format uptime
-  const formatUptime = (seconds) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const remainingSeconds = Math.floor(seconds % 60)
-    return `${hours}h ${minutes}m ${remainingSeconds}s`
-  }
-
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
@@ -161,7 +195,7 @@ function App() {
             <div className="w-3 h-3 rounded-full bg-red-500"></div>
             <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="ml-4 text-sm font-medium">Web Terminal</span>
+            <span className="ml-4 text-sm font-medium">Web Bash Terminal</span>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
@@ -169,9 +203,6 @@ function App() {
               <span className="text-xs text-gray-400">
                 {isConnected ? 'Connected' : 'Disconnected'}
               </span>
-            </div>
-            <div className="text-xs text-gray-400">
-              Server: {serverStatus.status === 'ok' ? '🟢' : '🔴'} {formatUptime(serverStatus.uptime)}
             </div>
           </div>
         </div>
