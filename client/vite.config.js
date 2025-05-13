@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/socket.io': {
-        target: 'http://localhost:4000',
+        target: 'https://terminal-1mn3.onrender.com',
         ws: true,
         changeOrigin: true,
         secure: false,
