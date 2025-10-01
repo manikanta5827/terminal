@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/socket.io': {
-        target: 'https://terminal-1mn3.onrender.com',
+        target: import.meta.env.VITE_API_URL,
         ws: true,
         changeOrigin: true,
         secure: false,
