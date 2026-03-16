@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/socket.io': {
-        target: import.meta.env.VITE_API_URL,
+        target: 'http://localhost:4000',
         ws: true,
         changeOrigin: true,
         secure: false,
